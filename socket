@@ -1,0 +1,163 @@
+import socket
+import threading
+import logging
+import datetime
+import os
+import photoresult as ph
+
+FORMAT = "%(asctime)s %(threadName)s %(thread)d %(message)s"
+logging.basicConfig(format = FORMAT, level = logging.INFO)
+
+class FaceServer:
+
+    index = 0
+    b = '.jpg'
+    ad = './image/'
+    filename = ad + str(index) + b
+
+    def __init__(self,ip = '10.0.1.33',port = 9999):
+        self.addr = (ip,port)
+        self.sock = socket.socket()
+        self.clients = {}
+        self.event = threading.Event()
+
+    def checkExsit(self):
+        list = os.listdir('./image/')
+        for iterm in list:
+            iterm = './image/' + iterm
+            #print(iterm)
+            os.remove(iterm)
+        print
+        'Exsit file has been removed'
+        print
+        'Create file ...'
+        with open(self.filename, 'wb') as f:
+            pass
+
+    def start(self):
+        self.sock.bind(self.addr)
+        self.sock.listen()#启动服务
+        logging.info('start socket')
+
+        threading.Thread(target = self.accept,name = 'accept').start()
+
+    def accept(self):
+        while not self.event.is_set():
+            try:
+                s,raddr = self.sock.accept()#这里会进入阻塞,所以转到子线程
+                logging.info(s)
+                logging.info(raddr)
+            except Exception as e:
+                logging.error(e)
+
+
+            self.clients[raddr] = s
+            self.save(s,raddr)
+
+
+    def recvImage(self,sock:socket.socket,addr):
+        while not self.event.is_set():
+
+            try:
+                data = sock.recv(1024)#接收到的是bytes，阻塞
+                #logging.info(data)#打印到日志
+            except Exception as e:
+                logging.error(e)
+                data = 'quit'
+            #print(data)
+            if data == 'quit':
+                self.clients.pop(sock.getpeername())
+                self.sock.close()
+                self.index = 0
+                self.filename = self.ad + str(self.index) + self.b
+                self.event.set()
+                break
+
+            if data == b'':
+                logging.info('The message has been all received!')
+                self.clients.pop(sock.getpeername())
+                self.sock.close()
+                self.index = 0
+                self.filename = self.ad + str(self.index) + self.b
+                self.event.set()
+                break
+            elif data == b'\xff' :
+                logging.info('The message has been all received!')
+                self.clients.pop(sock.getpeername())
+                self.sock.close()
+                self.index = 0
+                self.filename = self.ad + str(self.index) + self.b
+                #print("asijfuawheigufhweiugh\n")
+                self.event.set()
+                break
+            else:
+                with open(self.filename, 'ab') as f:
+                    f.write(data)
+                    f.close()
+        sock.send(self.define())
+        print
+        'data received'
+
+
+    def define(self):
+        i = ph.evaluate_one_image()
+        msg = bytes(str(i),encoding='utf-8')#"".format('-1').encode()
+        return msg
+
+    def save(self,sock:socket.socket,addr):
+
+        print
+        'Begin to save image ...'
+        self.checkExsit()
+        t = threading.Thread(target=self.recvImage, args=(sock,addr))
+        t.setDaemon(True)
+        t.start()
+        t.join()
+        self.index = self.index + 1
+        filename = self.ad + str(self.index) + self.b
+        print
+        'Finished saving image ...'
+
+    def recv(self,sock:socket.socket,addr):
+        while not self.event.is_set():
+            try:
+
+                data = sock.recv(1024)#接收到的是bytes，阻塞
+                logging.info(data)#打印到日志
+            except Exception as e:
+                logging.error(e)
+                data = b'quit'
+
+            if data == b'quit':
+                self.clients.pop(sock.getpeername())
+                sock.close()
+                break
+
+            msg = "{} {} {}".format(
+                sock.getpeername(),
+                datetime.datetime.now().strftime("%Y/%m/%d-%H:%M:%S"),
+                data.decode()).encode()#将发送方的ip和时间戳作为信息发送给每个socket
+
+
+            for s in self.clients.values():
+                s.send(msg)
+
+    def stop(self):
+
+        for s in self.clients.values():
+            s.close()
+        self.sock.close()
+        self.event.set()
+
+cs = FaceServer()
+cs.start()
+
+while True:
+    cmd = input(">>>")
+    if cmd.strip() == 'quit':
+        cs.stop()
+        threading.Event.wait(3)
+        break
+
+    logging.info(threading.enumerate())
+
