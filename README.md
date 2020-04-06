@@ -13,3 +13,7 @@ inputwithmodel.py是训练神经网络的文件
 训练模型在reload2文件夹中 训练图像集在photo文件夹中
 tireddrivinglocal3.py是实现疲劳检测的文件
 tyr.py是连接神经网络和Android的后端
+
+运行状况：
+ <img src="./img4.png" width = "300" height = "300" div align=center />
+ 
